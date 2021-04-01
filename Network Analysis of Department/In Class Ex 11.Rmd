@@ -1,0 +1,171 @@
+---
+title: "In Class Ex 11"
+author: "Shreyansh Shivam"
+date: "4/4/2020"
+output: html_document
+---
+
+# Install Packages
+```{r}
+packages = c('igraph', 'tidygraph', 'visNetwork', 'lubridate', 'tidyverse')
+
+for(p in packages){library
+  if(!require(p, character.only = T)){
+    install.packages(p)
+  }
+  library(p, character.only = T)
+}
+```
+```{r}
+# Code to check if the packages are installed or not
+p <- c('igraph', 'tidygraph', 'ggraph', 'visNetwork', 'lubridate', 'tidyverse')
+lapply(p, require, character.only = TRUE)
+```
+
+# Importing network data from files
+
+```{r}
+GAStech_nodes <- read_csv("data/GAStech_email_node.csv")
+GAStech_edges <- read_csv("data/GAStech_email_edge-v2.csv")
+```
+```{r}
+glimpse(GAStech_edges)
+```
+
+```{r}
+GAStech_edges$SentDate  = dmy(GAStech_edges$SentDate) # the sent date field to set as date from character 
+GAStech_edges$Weekday = wday(GAStech_edges$SentDate, label = TRUE, abbr = FALSE)
+```
+
+# Wrangling attributes
+
+A close examination of GAStech_edges data.frame reveals that it consists of individual e-mail flow records. This is not very useful for visualisation. In this section, we will aggregate the individual by date, senders, receivers, main subject and day of the week.
+
+To accomplish the task, the code chunks below will be used.
+
+```{r}
+GAStech_edges_aggregated <- GAStech_edges %>%
+  filter(MainSubject == "Work related") %>%
+  group_by(source, target, Weekday) %>%
+    summarise(Weight = n()) %>%   # summarise by the number of count
+  filter(source!=target) %>%
+  filter(Weight > 1) %>% # to view connectivity with at least 2 nodes
+  ungroup()
+GAStech_edges_aggregated
+```
+```{r}
+GAStech_graph <- tbl_graph(nodes = GAStech_nodes, edges = GAStech_edges_aggregated, directed = TRUE)
+GAStech_graph
+```
+```{r}
+GAStech_graph %>%
+  activate(edges) %>%
+  arrange(desc(Weight)) # sorting of the edges as per the weight
+```
+
+```{r}
+library('ggraph')
+library('farver')
+ggraph(GAStech_graph) +
+  geom_edge_link() +
+  geom_node_point()
+```
+```{r}
+g <- ggraph(GAStech_graph) + 
+  geom_edge_link(aes()) +
+  geom_node_point(aes())
+
+g + theme_graph()
+```
+```{r}
+g <- ggraph(GAStech_graph) + 
+  geom_edge_link(aes(colour = 'grey50')) +
+  geom_node_point(aes(colour = 'grey40'))
+
+g + theme_graph(background = 'grey10', text_colour = 'white')
+```
+```{r}
+g <- ggraph(GAStech_graph, layout = "nicely") + 
+  geom_edge_link(aes()) +
+  geom_node_point(aes(colour = Department, size = 3))
+
+g + theme_graph()
+```
+```{r}
+g <- ggraph(GAStech_graph, layout = "nicely") + 
+  geom_edge_link(aes(width=Weight), alpha=0.2) +
+  scale_edge_width(range = c(0.1, 5)) +
+  geom_node_point(aes(colour = Department), size = 3)
+
+g + theme_graph()
+```
+```{r}
+set_graph_style()
+
+g <- ggraph(GAStech_graph) + 
+  geom_edge_link(aes()) +
+  geom_node_point(aes(colour = Department))
+  
+g + facet_edges(~Weekday)
+```
+
+```{r}
+set_graph_style()
+
+g <- ggraph(GAStech_graph) + 
+  geom_edge_link(aes()) +
+  geom_node_point(aes(colour = Department))
+  
+g + facet_nodes(~Department)+
+  th_foreground(foreground = "grey80",  border = TRUE)
+```
+```{r}
+g <- GAStech_graph %>%
+  mutate(betweenness_centrality = centrality_betweenness()) %>%
+  mutate(closeness_centrality = centrality_closeness()) %>%
+  ggraph(layout = "nicely") + 
+  geom_edge_link(aes()) +
+  geom_node_point(aes(colour = closeness_centrality, size=betweenness_centrality))
+
+g + theme_graph()
+```
+
+```{r}
+GAStech_edges_aggregated <- GAStech_edges %>%
+  left_join(GAStech_nodes, by = c("sourceLabel" = "label")) %>%
+  rename(from = id) %>%
+  left_join(GAStech_nodes, by = c("targetLabel" = "label")) %>%
+  rename(to = id) %>%
+  filter(MainSubject == "Work related") %>%
+  group_by(from, to) %>%
+    summarise(weight = n()) %>%
+  filter(from!=to) %>%
+  filter(weight > 1) %>%
+  ungroup()
+visNetwork(GAStech_nodes, GAStech_edges_aggregated)
+```
+```{r}
+visNetwork(GAStech_nodes, GAStech_edges_aggregated) %>%
+  visIgraphLayout(layout = "layout_with_fr")
+```
+```{r}
+GAStech_nodes <- GAStech_nodes %>%
+  rename(group = Department)
+```
+
+```{r}
+visNetwork(GAStech_nodes, GAStech_edges_aggregated) %>%
+  visIgraphLayout(layout = "layout_with_fr") 
+```
+```{r}
+visNetwork(GAStech_nodes, GAStech_edges_aggregated) %>%
+  visIgraphLayout(layout = "layout_with_fr") %>%
+  visEdges(arrows = "to", smooth = list(enabled = TRUE, type = "curvedCW"))
+```
+```{r}
+visNetwork(GAStech_nodes, GAStech_edges_aggregated) %>%
+  visIgraphLayout(layout = "layout_with_fr") %>%
+  visOptions(highlightNearest = TRUE, nodesIdSelection = TRUE)
+
+```
+
